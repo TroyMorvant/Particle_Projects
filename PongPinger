@@ -1,0 +1,82 @@
+// Sketch for Particle Photon - PIR Sensor / Motion Detection
+// By Troy Morvant
+
+int inputPin = D0;              // choose the input pin (for PIR sensor)
+int ledPin = D7;                // LED Pin
+int pirState = LOW;             // we start, assuming no motion detected
+int val = 0;                    // variable for reading the pin status
+
+int calibrateTime = 10000;      // wait for the thingy to calibrate
+
+void setup() {
+    pinMode(ledPin, OUTPUT);
+    pinMode(inputPin, INPUT);     // declare sensor as input
+    Particle.function("status", tableState);
+    Particle.function("reportData", reportTheData);
+}
+
+void loop() {
+   Particle.variable("CurrentStatus", &pirState, INT);
+   Particle.variable("SensorValue", &val, INT);
+   val = readTheSensor();
+  // if the sensor is calibrated
+  if (calibrated()) {
+    // report it out, if the state has changed
+    reportTheData("");
+    }
+}
+
+int readTheSensor() {
+    return digitalRead(inputPin);
+}
+
+bool calibrated() {
+    return millis() - calibrateTime > 0;
+}
+
+void setLED(int state) {
+    digitalWrite(ledPin, state);
+}
+
+bool sendIsFree(){
+    return Particle.publish("IS_FREE", "{\"attachments\":[{\"color\": \"good\",\"text\": \"The Table is available!\"}]}", PRIVATE);
+}
+bool sendNotFree(){
+    return Particle.publish("IS_NOT_FREE", "{\"attachments\":[{\"color\": \"danger\",\"text\": \"The Table is NOT available!\"}]}", PRIVATE);
+}
+//
+// Cloud functions must return int and take one String
+int tableState(String extra) {
+    bool success = false;
+    if (pirState == LOW) {
+        sendIsFree();
+        return 0;
+    }else{
+        sendNotFree();
+        return 1;
+    }
+}
+
+int reportTheData(String huh) {
+    if (val == HIGH) {
+        // the current state is no motion
+        // i.e. it's just changed
+        // announce this change by publishing an event
+        if (pirState == LOW) {
+          // we have just turned on
+          // Update the current state
+          pirState = HIGH;
+          setLED(pirState);
+          Particle.publish("STATE_CHANGED", "{\"attachments\":[{\"color\": \"danger\",\"text\": \"The Table is NOT available!\"}]}", PRIVATE);
+        }
+    } else {
+        if (pirState == HIGH) {
+          // we have just turned of
+          // Update the current state
+          pirState = LOW;
+          setLED(pirState);
+          Particle.publish("STATE_CHANGED", "{\"attachments\":[{\"color\": \"danger\",\"text\": \"The Table is NOT available!\"}]}", PRIVATE);
+        }
+    }
+     return pirState;
+}
